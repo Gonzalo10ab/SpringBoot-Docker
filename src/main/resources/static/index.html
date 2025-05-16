@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Gestor de Tienda</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: auto;
+            padding: 20px;
+        }
+
+        h1,
+        h2 {
+            text-align: center;
+            color: #1a73e8;
+        }
+
+        ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        li {
+            background: #f0f0f0;
+            margin: 8px 0;
+            padding: 10px;
+            border-radius: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        form {
+            margin-bottom: 30px;
+        }
+
+        input,
+        button {
+            margin: 5px;
+            padding: 8px;
+        }
+
+        .edit-btn {
+            background-color: orange;
+            border: none;
+            margin-right: 5px;
+            color: white;
+            padding: 6px 10px;
+            cursor: pointer;
+        }
+
+        .delete-btn {
+            background-color: red;
+            border: none;
+            color: white;
+            padding: 6px 10px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Lista de Usuarios</h1>
+    <ul id="usuarios-lista"></ul>
+
+    <h2>Añadir nuevo usuario</h2>
+    <form id="usuario-form">
+        <input type="text" id="nombre" placeholder="Nombre" required />
+        <input type="number" id="edad" placeholder="Edad" required />
+        <button type="submit">Añadir</button>
+    </form>
+
+    <h1>Lista de Productos</h1>
+    <ul id="productos-lista"></ul>
+
+    <h2>Añadir nuevo producto</h2>
+    <form id="producto-form">
+        <input type="text" id="nombre-producto" placeholder="Nombre del producto" required />
+        <input type="number" step="0.01" id="precio-producto" placeholder="Precio" required />
+        <button type="submit">Añadir producto</button>
+    </form>
+
+    <!-- JavaScript que gestiona la lógica del CRUD desde el frontend -->
+    <script>
+        /**
+         * Renderiza una lista de elementos en pantalla (usuarios o productos)
+         * @param {string} endpoint - Ruta de la API (por ejemplo: /api/usuarios)
+         * @param {string} ulId - ID del <ul> donde se mostrará la lista
+         * @param {function} formatter - Función que define cómo mostrar cada elemento
+         */
+        function renderLista(endpoint, ulId, formatter) {
+            fetch(endpoint) // Hacemos una petición GET al servidor
+                .then(res => res.json()) // Convertimos la respuesta a JSON
+                .then(data => {
+                    const lista = document.getElementById(ulId);
+                    lista.innerHTML = ""; // Limpiamos la lista antes de repintar
+
+                    data.forEach(item => {
+                        const li = document.createElement('li');
+                        li.textContent = formatter(item); // Usamos el formato definido para mostrar los datos
+
+                        // Botón para editar
+                        const btnEditar = document.createElement('button');
+                        btnEditar.textContent = 'Editar';
+                        btnEditar.className = 'edit-btn';
+                        btnEditar.addEventListener('click', () => {
+                            if (endpoint.includes('usuarios')) {
+                                const nuevoNombre = prompt("Nuevo nombre:", item.nombre);
+                                const nuevaEdad = prompt("Nueva edad:", item.edad);
+                                if (nuevoNombre && nuevaEdad && !isNaN(nuevaEdad)) {
+                                    fetch(`${endpoint}/${item.id}`, {
+                                        method: 'PUT',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({
+                                            nombre: nuevoNombre,
+                                            edad: parseInt(nuevaEdad)
+                                        })
+                                    }).then(() => renderLista(endpoint, ulId, formatter));
+                                }
+                            } else {
+                                const nuevoNombre = prompt("Nuevo nombre del producto:", item.nombre);
+                                const nuevoPrecio = prompt("Nuevo precio:", item.precio);
+                                if (nuevoNombre && nuevoPrecio && !isNaN(nuevoPrecio)) {
+                                    fetch(`${endpoint}/${item.id}`, {
+                                        method: 'PUT',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({
+                                            nombre: nuevoNombre,
+                                            precio: parseFloat(nuevoPrecio)
+                                        })
+                                    }).then(() => renderLista(endpoint, ulId, formatter));
+                                }
+                            }
+                        });
+
+                        // Botón para eliminar
+                        const btnEliminar = document.createElement('button');
+                        btnEliminar.textContent = 'Eliminar';
+                        btnEliminar.className = 'delete-btn';
+                        btnEliminar.addEventListener('click', () => {
+                            fetch(`${endpoint}/${item.id}`, {
+                                method: 'DELETE'
+                            })
+                                .then(() => renderLista(endpoint, ulId, formatter))
+                                .catch(err => console.error('Error al eliminar:', err));
+                        });
+
+                        // Añadimos los botones al <li> y luego el <li> a la lista
+                        li.appendChild(btnEditar);
+                        li.appendChild(btnEliminar);
+                        lista.appendChild(li);
+                    });
+                })
+                .catch(err => console.error(`Error al cargar ${endpoint}:`, err));
+        }
+
+        /**
+         * Gestiona el envío de un formulario para crear un nuevo recurso (usuario o producto)
+         * @param {string} formId - ID del formulario (por ejemplo: 'usuario-form')
+         * @param {string} endpoint - Ruta del servidor donde enviar los datos
+         * @param {function} dataBuilder - Función que construye el objeto con los datos del formulario
+         * @param {function} callback - Función a ejecutar después de enviar correctamente
+         */
+        function enviarFormulario(formId, endpoint, dataBuilder, callback) {
+            const form = document.getElementById(formId);
+            form.addEventListener('submit', function (e) {
+                e.preventDefault(); // Prevenimos que se recargue la página
+                const data = dataBuilder(); // Obtenemos los datos del formulario
+
+                fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data) // Enviamos el objeto convertido a JSON
+                })
+                    .then(res => res.json())
+                    .then(() => {
+                        callback(); // Volvemos a pintar la lista actualizada
+                        form.reset(); // Limpiamos el formulario tras el envío
+                    });
+            });
+        }
+
+        // Mostrar usuarios al cargar la página
+        renderLista('/api/usuarios', 'usuarios-lista', u => `Nombre: ${u.nombre} - Edad: ${u.edad}`);
+
+        // Mostrar productos al cargar la página
+        renderLista('/api/productos', 'productos-lista', p => `Producto: ${p.nombre} - Precio: ${p.precio}€`);
+
+        // Enviar formulario para crear un nuevo usuario
+        enviarFormulario('usuario-form', '/api/usuarios', () => ({
+            nombre: document.getElementById('nombre').value,
+            edad: parseInt(document.getElementById('edad').value)
+        }), () => renderLista('/api/usuarios', 'usuarios-lista', u => `Nombre: ${u.nombre} - Edad: ${u.edad}`));
+
+        // Enviar formulario para crear un nuevo producto
+        enviarFormulario('producto-form', '/api/productos', () => ({
+            nombre: document.getElementById('nombre-producto').value,
+            precio: parseFloat(document.getElementById('precio-producto').value)
+        }), () => renderLista('/api/productos', 'productos-lista', p => `Producto: ${p.nombre} - Precio: ${p.precio}€`));
+    </script>
+
+</body>
+
+</html>
